@@ -8,7 +8,7 @@ if [ -z "$1" ]; then
 fi
 
 # Path ke private key
-KEY_PATH=~/.ssh/poc-mcp
+KEY_PATH=./poc-mcp
 
 # SSH ke server
 echo "🔐 Connecting to ec2-user@$1 using key $KEY_PATH..."

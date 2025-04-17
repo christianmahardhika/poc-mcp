@@ -7,11 +7,11 @@ variable "instance_type" {
 variable "spot_price" {
   description = "Maximum hourly price you're willing to pay for the Spot Instance"
   type        = string
-  default     = "0.80" # Misalnya, $0.30 per jam
+  default     = "0.15" # Misalnya, $0.30 per jam
 }
 
 variable "public_key_path" {
   description = "Path to public key file (e.g., ~/.ssh/poc-mcp.pub)"
   type        = string
-  default     = "~/.ssh/poc-mcp.pub"
+  default     = "./poc-mcp.pub"
 }

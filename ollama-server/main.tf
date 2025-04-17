@@ -3,14 +3,14 @@ provider "aws" {
 }
 
 resource "aws_key_pair" "poc_mcp" {
-  key_name   = "poc-mcp"
+  key_name   = "poc-mcp-cm"
   public_key = file(var.public_key_path)
 }
 
 resource "aws_security_group" "ollama_sg" {
-  name        = "ollama-jk"
+  name        = "ollama-sg"
   description = "Allow SSH and HTTP"
-  vpc_id      = data.aws_vpc.default.id
+  vpc_id      = aws_vpc.ollama_vpc.id
 
   ingress {
     description = "SSH"
@@ -51,7 +51,7 @@ data "aws_ami" "amazon_linux" {
 
   filter {
     name   = "name"
-    values = ["al2023-ami-*-x86_64"]
+    values = ["Deep Learning Base OSS Nvidia Driver GPU AMI (Amazon Linux 2023) *"]
   }
 
   filter {
@@ -60,31 +60,55 @@ data "aws_ami" "amazon_linux" {
   }
 }
 
-data "aws_vpc" "default" {
-  default = true
+# data "aws_vpc" "default" {
+#   default = true
+# }
+
+resource "aws_vpc" "ollama_vpc" {
+  cidr_block = "10.0.0.0/16"
 }
 
+resource "aws_subnet" "ollama_subnet" {
+  vpc_id                  = aws_vpc.ollama_vpc.id
+  cidr_block              = "10.0.1.0/24"     # Subnet CIDR block
+  availability_zone       = "ap-southeast-3a" # Adjust based on your region
+  map_public_ip_on_launch = true
+}
+
+
+
 resource "aws_spot_instance_request" "ollama_spot" {
-  ami                    = "ami-0d2942d2a406a7156" # Amazon Linux 2023 x86_64 Deep Learning
+  ami = data.aws_ami.amazon_linux.id
+  //ami                    = "ami-0d2942d2a406a7156"
   instance_type          = var.instance_type
   key_name               = aws_key_pair.poc_mcp.key_name
   vpc_security_group_ids = [aws_security_group.ollama_sg.id]
+  subnet_id              = aws_subnet.ollama_subnet.id # Associate the subnet
 
-  spot_price           = var.spot_price
-  wait_for_fulfillment = true
+  spot_price                  = var.spot_price
+  wait_for_fulfillment        = true
+  associate_public_ip_address = true
 
   user_data = <<-EOF
               #!/bin/bash
               yum update -y
 
-              # Install Ollama
-              curl -fsSL https://ollama.com/install.sh | sh
+              runuser -l ec2-user -c '
+                sudo dnf install -y kernel-devel-$(uname -r) gcc dkms make
+                curl -O https://us.download.nvidia.com/tesla/535.161.07/NVIDIA-Linux-x86_64-535.161.07.run
+                chmod +x NVIDIA-Linux-x86_64-535.161.07.run
+                sudo ./NVIDIA-Linux-x86_64-535.161.07.run --silent
+                sudo modprobe nvidia
+                nvidia-smi || echo "NVIDIA GPU not detected"
 
-              export OLLAMA_HOST=0.0.0.0 
-              nohup ollama serve > ~/ollama.log 2>&1 &
-              ollama run deepseek-r1
+                curl -fsSL https://ollama.com/install.sh | sh
+                sleep 5
+
+                OLLAMA_HOST=0.0.0.0 nohup ollama serve > /home/ec2-user/ollama.log 2>&1 &
+                OLLAMA_HOST=0.0.0.0 ollama run deepseek-r1
+              '
               EOF
   tags = {
-    Name = "olla-poc"
+    Name = "poc-ollama-mcp"
   }
 }
